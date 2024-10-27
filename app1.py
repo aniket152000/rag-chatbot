@@ -23,26 +23,27 @@ if "history" not in st.session_state:
 if "retriever" not in st.session_state:
     st.session_state.retriever = None
 
-# Sidebar for uploading files
+# Initialize data variable
+data = []  # Initialize data to avoid NameError
+
+# Sidebar for uploading PDFs
 with st.sidebar:
     st.title("Menu:")
-    uploaded_file = st.file_uploader("Upload your files (PDF, DOCX, TXT, etc.)", type=["pdf", "docx", "txt"], accept_multiple_files=True)
+    uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
     if st.button("Submit & Process") and uploaded_file:
         with st.spinner("Processing..."):
-            all_docs = []
-            for file in uploaded_file:
-                temp_file_path = f"./temp_{file.name}"
-                with open(temp_file_path, "wb") as f:
-                    f.write(file.getbuffer())
-                if file.type == "application/pdf":
-                    loader = PyPDFLoader(temp_file_path)
-                    all_docs.extend(loader.load())
-                # Add additional loaders for other file types as needed
-                os.remove(temp_file_path)
+            temp_file_path = f"./temp_{uploaded_file.name}"
+            with open(temp_file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            loader = PyPDFLoader(temp_file_path)
+            data = loader.load()  # Load the data
+            os.remove(temp_file_path)
 
-# Split the loaded documents into chunks
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000)
-docs = text_splitter.split_documents(all_docs)
+# Check if data is loaded before processing
+if data:
+    # Split the loaded documents into chunks
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000)
+    docs = text_splitter.split_documents(data)
 
 # Create a directory for Chroma DB
 vectorstore = Chroma.from_documents(
