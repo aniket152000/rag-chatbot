@@ -45,15 +45,16 @@ if data:
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000)
     docs = text_splitter.split_documents(data)
 
-# Create a directory for Chroma DB
-vectorstore = Chroma.from_documents(
-    documents=docs, 
-    embedding=GoogleGenerativeAIEmbeddings(model="models/embedding-001"),
-    persist_directory="./chroma_db"
-)
-# Set up the retriever with similarity search
-st.session_state.retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 10})
-st.success("Done")
+    # Create a directory for Chroma DB
+    vectorstore = Chroma.from_documents(
+        documents=docs, 
+        embedding=GoogleGenerativeAIEmbeddings(model="models/embedding-001"),
+        persist_directory="./chroma_db"
+    )
+    
+    # Set up the retriever with similarity search
+    st.session_state.retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 10})
+    st.success("Done")
 
 # User input for queries
 query = st.chat_input("Say something: ")
