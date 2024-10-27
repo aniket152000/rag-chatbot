@@ -9,7 +9,7 @@ from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
-#Python 3.10.9
+import os
 
 # Load environment variables
 load_dotenv()
@@ -17,38 +17,47 @@ load_dotenv()
 # Set title of the application
 st.title("RAG-Based Application Using Gemini Model")
 
-# Load PDF document
-loader = PyPDFLoader("Company-Policies-Manuals.pdf")
-data = loader.load()
+# Initialize session state for chat history and retriever
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "retriever" not in st.session_state:
+    st.session_state.retriever = None
+
+# Sidebar for uploading files
+with st.sidebar:
+    st.title("Menu:")
+    uploaded_file = st.file_uploader("Upload your files (PDF, DOCX, TXT, etc.)", type=["pdf", "docx", "txt"], accept_multiple_files=True)
+    if st.button("Submit & Process") and uploaded_file:
+        with st.spinner("Processing..."):
+            all_docs = []
+            for file in uploaded_file:
+                temp_file_path = f"./temp_{file.name}"
+                with open(temp_file_path, "wb") as f:
+                    f.write(file.getbuffer())
+                if file.type == "application/pdf":
+                    loader = PyPDFLoader(temp_file_path)
+                    all_docs.extend(loader.load())
+                # Add additional loaders for other file types as needed
+                os.remove(temp_file_path)
 
 # Split the loaded documents into chunks
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000)
-docs = text_splitter.split_documents(data)
+docs = text_splitter.split_documents(all_docs)
 
 # Create a directory for Chroma DB
 vectorstore = Chroma.from_documents(
     documents=docs, 
     embedding=GoogleGenerativeAIEmbeddings(model="models/embedding-001"),
-    persist_directory="./chroma_db"  # Ensure a valid persist directory   
+    persist_directory="./chroma_db"
 )
-
 # Set up the retriever with similarity search
-retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 10})
-
-# Initialize the language model
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-pro", temperature=0, max_tokens=None, timeout=None
-)
-
-# Initialize session state for chat history
-if "history" not in st.session_state:
-    st.session_state.history = []
+st.session_state.retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 10})
+st.success("Done")
 
 # User input for queries
-query = st.chat_input("Say something: ") 
+query = st.chat_input("Say something: ")
 
-if query:
-    # Store the user's query in history
+if query and st.session_state.retriever:  # Ensure retriever is defined
     st.session_state.history.append({"user": query})
 
     # System prompt for the model
@@ -71,8 +80,11 @@ if query:
     )
 
     # Set up the question-answer chain
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+    question_answer_chain = create_stuff_documents_chain(
+        ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0), 
+        prompt
+    )
+    rag_chain = create_retrieval_chain(st.session_state.retriever, question_answer_chain)
 
     # Get the response from the RAG chain
     response = rag_chain.invoke({"input": query})
